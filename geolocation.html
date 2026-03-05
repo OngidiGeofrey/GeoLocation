@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoLocator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00f5a0;
+    --accent2: #00c9ff;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+    --danger: #ff4d6d;
+    --card: #13131f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    pointer-events: none;
+    animation: drift 8s ease-in-out infinite alternate;
+  }
+  .orb1 { width: 400px; height: 400px; background: var(--accent); top: -100px; left: -100px; }
+  .orb2 { width: 300px; height: 300px; background: var(--accent2); bottom: -80px; right: -80px; animation-delay: -4s; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0); }
+    to { transform: translate(30px, 20px); }
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 420px;
+    max-width: 95vw;
+  }
+
+  .header {
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 245, 160, 0.08);
+    border: 1px solid rgba(0, 245, 160, 0.25);
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 100px;
+    margin-bottom: 16px;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #fff 0%, #888 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  /* Crosshair SVG */
+  .crosshair-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+
+  .crosshair {
+    width: 100px;
+    height: 100px;
+    position: relative;
+  }
+
+  .crosshair svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .ring {
+    fill: none;
+    stroke-width: 1;
+    transform-origin: center;
+  }
+
+  .ring-outer { stroke: rgba(0,245,160,0.2); }
+  .ring-mid { stroke: rgba(0,245,160,0.35); animation: spinSlow 12s linear infinite; }
+  .ring-inner { stroke: rgba(0,245,160,0.6); animation: spinSlow 8s linear infinite reverse; }
+  .dot { fill: var(--accent); animation: pulse 2s ease-in-out infinite; }
+
+  @keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Coord display */
+  .coords-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .coord-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .coord-box.active {
+    border-color: rgba(0, 245, 160, 0.4);
+    box-shadow: 0 0 20px rgba(0, 245, 160, 0.06);
+  }
+
+  .coord-box.active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,245,160,0.04) 0%, transparent 60%);
+  }
+
+  .coord-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .coord-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    word-break: break-all;
+    min-height: 24px;
+    transition: all 0.3s;
+  }
+
+  .coord-value.empty {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  /* Full row box */
+  .coord-box-full {
+    grid-column: 1 / -1;
+  }
+
+  /* Button */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    background: transparent;
+    border: 1px solid rgba(0, 245, 160, 0.5);
+    border-radius: 12px;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+  }
+
+  .btn:hover::before { transform: translateY(0); }
+
+  .btn:hover {
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .btn span { position: relative; z-index: 1; }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn:disabled::before { display: none; }
+  .btn:disabled:hover { color: var(--accent); }
+
+  /* Status bar */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    min-height: 18px;
+    transition: all 0.3s;
+  }
+
+  .status.success { color: var(--accent); }
+  .status.error { color: var(--danger); }
+  .status.loading { color: var(--accent2); }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  .status.loading .status-dot { animation: pulse 1s ease-in-out infinite; }
+
+  /* Copy row */
+  .copy-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .copy-btn {
+    flex: 1;
+    padding: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover {
+    border-color: rgba(0, 201, 255, 0.4);
+    color: var(--accent2);
+  }
+
+  .copy-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .copy-btn:disabled:hover { border-color: var(--border); color: var(--muted); }
+
+  /* Accuracy badge */
+  .accuracy {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  .accuracy span { color: var(--accent); }
+
+  /* Permission Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--card);
+    border: 1px solid rgba(0,245,160,0.25);
+    border-radius: 20px;
+    padding: 32px;
+    width: 360px;
+    max-width: 90vw;
+    position: relative;
+    animation: modalIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.85) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .modal-icon {
+    width: 56px; height: 56px;
+    background: rgba(0,245,160,0.08);
+    border: 1px solid rgba(0,245,160,0.2);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 20px;
+  }
+
+  .modal h2 {
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .modal p {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  .modal p strong { color: var(--text); }
+
+  .steps {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .step:last-child { border-bottom: none; padding-bottom: 0; }
+  .step:first-child { padding-top: 0; }
+
+  .step-num {
+    width: 22px; height: 22px;
+    background: rgba(0,245,160,0.12);
+    border: 1px solid rgba(0,245,160,0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .step-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .step-text em {
+    color: var(--accent2);
+    font-style: normal;
+    font-weight: 700;
+  }
+
+  .browser-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .browser-tab {
+    flex: 1;
+    padding: 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .browser-tab.active {
+    border-color: rgba(0,245,160,0.4);
+    color: var(--accent);
+    background: rgba(0,245,160,0.06);
+  }
+
+  .modal-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+  }
+
+  .modal-btn:hover { background: #00ffaa; transform: translateY(-1px); }
+
+  .modal-dismiss {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-dismiss:hover { border-color: var(--muted); color: var(--text); }
+
+  /* Scan animation for loading */
+  @keyframes scanLine {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  .scanning .scan-line {
+    display: block;
+  }
+
+  .scan-line {
+    display: none;
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    animation: scanLine 1.5s linear infinite;
+    pointer-events: none;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div class="container">
+  <div class="header">
+    <div class="badge">GPS Signal</div>
+    <h1>GeoLocator</h1>
+  </div>
+
+  <div class="card" id="card">
+    <div class="scan-line" id="scanLine"></div>
+
+    <div class="crosshair-wrap">
+      <div class="crosshair">
+        <svg viewBox="0 0 100 100">
+          <!-- Outer ring with dashes -->
+          <circle class="ring ring-outer" cx="50" cy="50" r="46" stroke-dasharray="8 6"/>
+          <!-- Mid ring -->
+          <circle class="ring ring-mid" cx="50" cy="50" r="34" stroke-dasharray="4 8"/>
+          <!-- Inner ring -->
+          <circle class="ring ring-inner" cx="50" cy="50" r="20" stroke-dasharray="3 5"/>
+          <!-- Crosshair lines -->
+          <line x1="50" y1="4" x2="50" y2="20" stroke="rgba(0,245,160,0.5)" stroke-width="1"/>
+          <line x1="50" y1="80" x2="50" y2="96" stroke="rgba(0,245,160,0.5)" stroke-width="1"/>
+          <line x1="4" y1="50" x2="20" y2="50" stroke="rgba(0,245,160,0.5)" stroke-width="1"/>
+          <line x1="80" y1="50" x2="96" y2="50" stroke="rgba(0,245,160,0.5)" stroke-width="1"/>
+          <!-- Center dot -->
+          <circle class="dot" cx="50" cy="50" r="3"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="coords-grid">
+      <div class="coord-box" id="latBox">
+        <div class="coord-label">Latitude</div>
+        <div class="coord-value empty" id="latVal">—</div>
+      </div>
+      <div class="coord-box" id="lonBox">
+        <div class="coord-label">Longitude</div>
+        <div class="coord-value empty" id="lonVal">—</div>
+      </div>
+      <div class="coord-box coord-box-full" id="accBox">
+        <div class="coord-label">Accuracy</div>
+        <div class="coord-value empty" id="accVal">—</div>
+      </div>
+    </div>
+
+    <button class="btn" id="locBtn" onclick="getLocation()">
+      <span id="btnText">▸ Get My Location</span>
+    </button>
+
+    <div class="copy-row">
+      <button class="copy-btn" id="copyCoords" onclick="copyCoords()" disabled>Copy Coords</button>
+      <button class="copy-btn" id="copyJson" onclick="copyJson()" disabled>Copy JSON</button>
+    </div>
+
+    <div class="status" id="status">
+      <div class="status-dot"></div>
+      <span id="statusText">Awaiting signal...</span>
+    </div>
+  </div>
+</div>
+
+<!-- Permission Modal -->
+<div class="modal-overlay" id="permModal">
+  <div class="modal">
+    <div class="modal-icon">📍</div>
+    <h2>Location Access Needed</h2>
+    <p>Your browser blocked location access. Follow these steps to <strong>enable it</strong> and try again.</p>
+
+    <div class="browser-tabs">
+      <button class="browser-tab active" onclick="switchBrowser('chrome')">Chrome</button>
+      <button class="browser-tab" onclick="switchBrowser('firefox')">Firefox</button>
+      <button class="browser-tab" onclick="switchBrowser('safari')">Safari</button>
+      <button class="browser-tab" onclick="switchBrowser('edge')">Edge</button>
+    </div>
+
+    <div class="steps" id="steps-chrome">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Click the <em>🔒 lock icon</em> in the address bar</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Select <em>Site settings</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Set <em>Location</em> to <em>Allow</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Reload the page and click <em>Get My Location</em></div>
+      </div>
+    </div>
+
+    <div class="steps" id="steps-firefox" style="display:none">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Click the <em>🔒 lock icon</em> left of the URL</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Click <em>Connection secure → More information</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Go to <em>Permissions</em> tab → uncheck <em>Access your location</em> block</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Reload the page and try again</div>
+      </div>
+    </div>
+
+    <div class="steps" id="steps-safari" style="display:none">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Open <em>Safari → Settings</em> (or Preferences)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Click <em>Websites → Location</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Find this site and set it to <em>Allow</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Reload the page and try again</div>
+      </div>
+    </div>
+
+    <div class="steps" id="steps-edge" style="display:none">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Click the <em>🔒 lock icon</em> in the address bar</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Click <em>Permissions for this site</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Set <em>Location</em> to <em>Allow</em></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Reload the page and try again</div>
+      </div>
+    </div>
+
+    <button class="modal-btn" onclick="retryLocation()">↺ Try Again</button>
+    <button class="modal-dismiss" onclick="closeModal()">Dismiss</button>
+  </div>
+</div>
+
+<script>
+let currentLat = null, currentLon = null, currentAcc = null;
+
+function setStatus(type, msg) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  document.getElementById('statusText').textContent = msg;
+}
+
+function getLocation() {
+  if (!navigator.geolocation) {
+    setStatus('error', 'Geolocation not supported by this browser.');
+    return;
+  }
+
+  const btn = document.getElementById('locBtn');
+  const card = document.getElementById('card');
+  const scanLine = document.getElementById('scanLine');
+
+  btn.disabled = true;
+  document.getElementById('btnText').textContent = '◌ Acquiring signal...';
+  card.classList.add('scanning');
+  scanLine.style.display = 'block';
+  setStatus('loading', 'Requesting location access...');
+
+  navigator.geolocation.getCurrentPosition(showPosition, showError, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0
+  });
+}
+
+function showPosition(pos) {
+  const btn = document.getElementById('locBtn');
+  const card = document.getElementById('card');
+  const scanLine = document.getElementById('scanLine');
+
+  currentLat = pos.coords.latitude;
+  currentLon = pos.coords.longitude;
+  currentAcc = pos.coords.accuracy;
+
+  // Animate in values
+  setTimeout(() => {
+    const latBox = document.getElementById('latBox');
+    const lonBox = document.getElementById('lonBox');
+    const accBox = document.getElementById('accBox');
+    const latVal = document.getElementById('latVal');
+    const lonVal = document.getElementById('lonVal');
+    const accVal = document.getElementById('accVal');
+
+    latBox.classList.add('active');
+    lonBox.classList.add('active');
+    accBox.classList.add('active');
+
+    latVal.className = 'coord-value';
+    lonVal.className = 'coord-value';
+    accVal.className = 'coord-value';
+
+    latVal.textContent = currentLat.toFixed(6);
+    lonVal.textContent = currentLon.toFixed(6);
+    accVal.textContent = '± ' + Math.round(currentAcc) + ' meters';
+
+    document.getElementById('copyCoords').disabled = false;
+    document.getElementById('copyJson').disabled = false;
+  }, 300);
+
+  btn.disabled = false;
+  document.getElementById('btnText').textContent = '↺ Refresh Location';
+  card.classList.remove('scanning');
+  scanLine.style.display = 'none';
+  setStatus('success', 'Signal acquired · ' + new Date().toLocaleTimeString());
+}
+
+function showError(error) {
+  const btn = document.getElementById('locBtn');
+  const card = document.getElementById('card');
+  const scanLine = document.getElementById('scanLine');
+
+  btn.disabled = false;
+  document.getElementById('btnText').textContent = '▸ Try Again';
+  card.classList.remove('scanning');
+  scanLine.style.display = 'none';
+
+  if (error.code === 1) {
+    // Permission denied — show helpful modal
+    document.getElementById('permModal').classList.add('show');
+    setStatus('error', 'Permission denied — see instructions above.');
+  } else if (error.code === 2) {
+    setStatus('error', 'Position unavailable — check your connection.');
+  } else if (error.code === 3) {
+    setStatus('error', 'Request timed out — try again.');
+  } else {
+    setStatus('error', 'Unknown error occurred.');
+  }
+}
+
+function closeModal() {
+  document.getElementById('permModal').classList.remove('show');
+}
+
+function retryLocation() {
+  closeModal();
+  setTimeout(getLocation, 200);
+}
+
+function switchBrowser(browser) {
+  ['chrome','firefox','safari','edge'].forEach(b => {
+    document.getElementById('steps-' + b).style.display = b === browser ? 'block' : 'none';
+  });
+  document.querySelectorAll('.browser-tab').forEach((tab, i) => {
+    tab.classList.toggle('active', tab.textContent.toLowerCase() === browser);
+  });
+}
+
+// Close modal on overlay click
+document.getElementById('permModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+function copyCoords() {
+  if (currentLat === null) return;
+  navigator.clipboard.writeText(`${currentLat}, ${currentLon}`)
+    .then(() => flashCopy('copyCoords', 'Copied!'))
+    .catch(() => {});
+}
+
+function copyJson() {
+  if (currentLat === null) return;
+  const data = JSON.stringify({ latitude: currentLat, longitude: currentLon, accuracy: currentAcc }, null, 2);
+  navigator.clipboard.writeText(data)
+    .then(() => flashCopy('copyJson', 'Copied!'))
+    .catch(() => {});
+}
+
+function flashCopy(id, msg) {
+  const btn = document.getElementById(id);
+  const original = btn.textContent;
+  btn.textContent = msg;
+  btn.style.color = 'var(--accent)';
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.style.color = '';
+  }, 1500);
+}
+</script>
+</body>
+</html>
