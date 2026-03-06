@@ -597,7 +597,7 @@
 
     <div class="copy-row">
       <button class="copy-btn" id="copyCoords" onclick="copyCoords()" disabled>Copy Coords</button>
-      <button class="copy-btn" id="copyJson" onclick="copyJson()" disabled>Copy JSON</button>
+      <button class="copy-btn" id="copyJson" onclick="shareWhatsapp()" disabled>Share WhatsApp</button>
     </div>
 
     <div class="status" id="status">
@@ -835,6 +835,21 @@ function copyJson() {
     .then(() => flashCopy('copyJson', 'Copied!'))
     .catch(() => {});
 }
+  function shareWhatsapp() {
+
+  if (currentLat === null) return;
+
+  const message = encodeURIComponent(
+    "📍 GPS Location\n" +
+    "Latitude: " + currentLat + "\n" +
+    "Longitude: " + currentLon + "\n" +
+    "Accuracy: " + currentAcc + "m\n\n" +
+    "View Map:\nhttps://maps.google.com/?q=" + currentLat + "," + currentLon
+  );
+
+  window.open("https://wa.me/?text=" + message, '_blank');
+
+  }
 
 function flashCopy(id, msg) {
   const btn = document.getElementById(id);
